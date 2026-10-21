@@ -1,0 +1,7 @@
+{
+  "dpi": 1000,
+  "wheel": "freespin",
+  "modeShift": "cycle_desktops",
+  "middle": "mission_control",
+  "backForward": { "keyboardNavApps": ["com.apple.finder", "com.apple.Safari"] }
+}
