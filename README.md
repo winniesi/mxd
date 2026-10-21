@@ -10,7 +10,7 @@
 
 | 按键 | 行为 |
 |---|---|
-| Mode shift 键（滚轮下方） | 切到下一个桌面（Space），在最后一个桌面上按会回到第一个 |
+| Mode shift 键（滚轮下方） | 在**鼠标所在的显示器**上切到下一个桌面（Space），在最后一个桌面上按会回到第一个；多显示器时把鼠标移过去就能立即生效，不用先点击 |
 | 中键（按下滚轮） | 打开 Mission Control |
 | 后退 / 前进 | 在 Finder、Safari 中改发 Cmd+[ / Cmd+]；其他 app（Chrome、Arc、Firefox 等）原样透传，由 app 自己处理 |
 | 滚轮 | 固定为 free spin（不再在棘轮和 free spin 之间切换） |
@@ -39,7 +39,7 @@ cd mxd && ./scripts/install.sh
 
 安装脚本会依次完成：
 
-- 编译出 release 版本，打包成 `~/Applications/mxd.app`，并做 ad-hoc 签名；
+- 编译出 release 版本，打包成 `~/Applications/mxd.app` 并签名：钥匙串里有 Apple Development / Developer ID 证书就用证书签名，没有就用 ad-hoc 签名；
 - 如果 `~/.config/mxd/config.json` 不存在，写入一份默认配置；
 - 安装 LaunchAgent `~/Library/LaunchAgents/com.winniesi.mxd.plist` 并启动它。
 
@@ -49,7 +49,7 @@ cd mxd && ./scripts/install.sh
 launchctl kickstart -k gui/$UID/com.winniesi.mxd
 ```
 
-> ⚠️ 每次重新编译安装后签名都会变，需要在这两个权限列表里把 mxd 关掉再打开（或者删掉后重新添加）。
+> 用证书签名时，重新编译不会让权限失效。如果用的是 ad-hoc 签名，每次重新编译安装后签名都会变，需要在这两个权限列表里把 mxd 删掉后重新添加。
 
 卸载：
 
@@ -115,6 +115,7 @@ MX Anywhere 3S ready
 ```
 
 - 日志出现 `IOHIDManagerOpen failed` 或 `event tap creation failed`：权限没有给，或者重新编译后权限失效了。
+- 不按鼠标也能测试 mode shift 键的动作：`kill -USR1 $(pgrep -x mxd)`，日志里会出现一行 `cycle: cursor display … space i/n, menu bar display …`。
 - 想在前台调试：先运行 `launchctl bootout gui/$UID/com.winniesi.mxd` 停掉后台的 mxd，再运行 `~/Applications/mxd.app/Contents/MacOS/mxd --verbose`。
 
 ## 监控内存

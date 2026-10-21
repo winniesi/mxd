@@ -43,4 +43,10 @@ let wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
 }
 
 signal(SIGTERM) { _ in exit(0) }
+
+// `kill -USR1 <pid>` runs the mode-shift action, for testing without pressing the button.
+signal(SIGUSR1, SIG_IGN)
+let usr1 = DispatchSource.makeSignalSource(signal: SIGUSR1, queue: .main)
+usr1.setEventHandler { Actions.perform(config.modeShift) }
+usr1.resume()
 CFRunLoopRun()

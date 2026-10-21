@@ -8,6 +8,8 @@ private func CGSMainConnectionID() -> Int32
 private func CGSGetActiveSpace(_ cid: Int32) -> UInt64
 @_silgen_name("CGSCopyManagedDisplaySpaces")
 private func CGSCopyManagedDisplaySpaces(_ cid: Int32) -> Unmanaged<CFArray>?
+@_silgen_name("CGSCopyActiveMenuBarDisplayIdentifier")
+private func CGSCopyActiveMenuBarDisplayIdentifier(_ cid: Int32) -> Unmanaged<CFString>?
 
 enum Actions {
     private static let keyLeft: CGKeyCode = 123
@@ -37,46 +39,74 @@ enum Actions {
     static func browserBack() { sendShortcut(keyLeftBracket, flags: .maskCommand) }
     static func browserForward() { sendShortcut(keyRightBracket, flags: .maskCommand) }
 
-    /// Move to the next Space on the active display; from the last one, wrap back to the first.
+    /// Move to the next Space on the display under the cursor; from the last one, wrap back to the first.
     static func cycleDesktop() {
         if cycling { return }
-        guard let (index, count) = currentSpacePosition() else {
+        let target = cursorDisplayID()
+        guard let pos = spacePosition(display: target) else {
+            log("cycle: no space info, sending ctrl+right")
             sendShortcut(keyRight, flags: [.maskControl, .maskSecondaryFn])
             return
         }
-        if index < count - 1 {
+        log("cycle: cursor display \(target ?? "?") space \(pos.index + 1)/\(pos.count), menu bar display \(menuBarDisplayID() ?? "?")")
+        if pos.count <= 1 { return }
+        if pos.index < pos.count - 1 {
             sendShortcut(keyRight, flags: [.maskControl, .maskSecondaryFn])
             return
         }
         // Wrap around: step left (count - 1) times. Each switch animates, so space the
         // key presses out a little and stop early if we already reached the first Space.
         cycling = true
-        stepLeft(remaining: count - 1)
+        stepLeft(remaining: pos.count - 1, display: target)
     }
 
-    private static func stepLeft(remaining: Int) {
-        guard remaining > 0, let (index, _) = currentSpacePosition(), index > 0 else {
+    private static func stepLeft(remaining: Int, display: String?) {
+        guard remaining > 0, let pos = spacePosition(display: display), pos.index > 0 else {
             cycling = false
             return
         }
         sendShortcut(keyLeft, flags: [.maskControl, .maskSecondaryFn])
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-            stepLeft(remaining: remaining - 1)
+            stepLeft(remaining: remaining - 1, display: display)
         }
     }
 
-    /// (index of the active Space, number of Spaces) on the display that holds the active Space.
-    private static func currentSpacePosition() -> (Int, Int)? {
+    /// UUID string of the display containing the mouse cursor (matches "Display Identifier").
+    static func cursorDisplayID() -> String? {
+        guard let point = CGEvent(source: nil)?.location else { return nil }
+        var id: CGDirectDisplayID = 0
+        var n: UInt32 = 0
+        guard CGGetDisplaysWithPoint(point, 1, &id, &n) == .success, n > 0,
+              let uuid = CGDisplayCreateUUIDFromDisplayID(id)?.takeRetainedValue() else { return nil }
+        return CFUUIDCreateString(nil, uuid) as String
+    }
+
+    static func menuBarDisplayID() -> String? {
+        CGSCopyActiveMenuBarDisplayIdentifier(CGSMainConnectionID())?.takeRetainedValue() as String?
+    }
+
+    /// Position of the current Space within the given display's Spaces. Falls back to the display
+    /// holding the active Space when the display isn't found (e.g. "Displays have separate Spaces" off).
+    private static func spacePosition(display: String?) -> (index: Int, count: Int)? {
         let cid = CGSMainConnectionID()
-        let active = CGSGetActiveSpace(cid)
         guard let displays = CGSCopyManagedDisplaySpaces(cid)?.takeRetainedValue() as? [[String: Any]] else {
             return nil
         }
-        for display in displays {
-            guard let spaces = display["Spaces"] as? [[String: Any]] else { continue }
-            let ids = spaces.compactMap { ($0["id64"] as? NSNumber)?.uint64Value
-                ?? ($0["ManagedSpaceID"] as? NSNumber)?.uint64Value }
-            if let i = ids.firstIndex(of: active) { return (i, ids.count) }
+        func spaceID(_ d: [String: Any]?) -> UInt64? {
+            (d?["id64"] as? NSNumber)?.uint64Value ?? (d?["ManagedSpaceID"] as? NSNumber)?.uint64Value
+        }
+        func position(_ d: [String: Any], current: UInt64) -> (Int, Int)? {
+            let ids = (d["Spaces"] as? [[String: Any]] ?? []).compactMap { spaceID($0) }
+            return ids.firstIndex(of: current).map { ($0, ids.count) }
+        }
+        if let display,
+           let d = displays.first(where: { ($0["Display Identifier"] as? String)?.caseInsensitiveCompare(display) == .orderedSame }),
+           let current = spaceID(d["Current Space"] as? [String: Any]) {
+            return position(d, current: current)
+        }
+        let active = CGSGetActiveSpace(cid)
+        for d in displays {
+            if let p = position(d, current: active) { return p }
         }
         return nil
     }
