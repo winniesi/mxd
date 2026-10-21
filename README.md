@@ -114,6 +114,7 @@ MX Anywhere 3S: dpi 1000 (idx 14) ok
 MX Anywhere 3S ready
 ```
 
+- mxd 没在运行（`pgrep -x mxd` 没有输出），并且 `launchctl print gui/$UID/com.winniesi.mxd` 提示找不到服务：多半是在 **系统设置 → 通用 → 登录项与扩展 → 允许在后台** 里把它关掉了。用证书签名时，这一项显示的是**证书上的开发者名字**，而不是 mxd，很容易误关。打开后系统会自动重新加载 mxd，也可以运行 `sfltool dumpbtm | grep -A3 com.winniesi.mxd` 确认状态是 `allowed`。
 - 日志出现 `IOHIDManagerOpen failed` 或 `event tap creation failed`：权限没有给，或者重新编译后权限失效了。
 - 不按鼠标也能测试 mode shift 键的动作：`kill -USR1 $(pgrep -x mxd)`，日志里会出现一行 `cycle: cursor display … space i/n, menu bar display …`。
 - 想在前台调试：先运行 `launchctl bootout gui/$UID/com.winniesi.mxd` 停掉后台的 mxd，再运行 `~/Applications/mxd.app/Contents/MacOS/mxd --verbose`。
